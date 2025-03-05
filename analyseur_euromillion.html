@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analyseur de Tirages EuroMillions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'primary': {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              200: '#bae6fd',
+              300: '#7dd3fc',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-gray-100 min-h-screen py-10">
+  <div class="container mx-auto px-4">
+    <div class="bg-white shadow-lg rounded-lg p-6">
+      <h1 class="text-3xl font-bold text-center text-primary-600 mb-6">
+        Analyseur de Tirages EuroMillions
+      </h1>
+      
+      <!-- Zone d'affichage des erreurs -->
+      <div id="errorMessage" class="text-center text-red-500 mb-4"></div>
+      
+      <!-- Zone d'affichage des résultats et de la visu du dernier tirage -->
+      <div id="results" class="space-y-6"></div>
+      
+      <!-- Bouton pour charger les tirages -->
+      <div class="flex justify-center mt-6">
+        <button id="loadData" class="px-6 py-2 bg-primary-500 text-white rounded hover:bg-primary-600">
+          Charger les tirages
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Fonction d'affichage du dernier tirage
+    function displayLastDraw(draw) {
+      // 'draw' est un tableau de 7 valeurs (les 5 numéros suivis des 2 étoiles)
+      const lastDrawDiv = document.createElement('div');
+      lastDrawDiv.className = 'bg-white shadow-md rounded-lg p-6 mb-6';
+      lastDrawDiv.innerHTML = `
+        <h2 class="text-2xl font-semibold text-primary-600 mb-4">Dernier Tirage</h2>
+        <div class="flex flex-col md:flex-row items-center justify-around">
+          <div class="flex flex-wrap justify-center mb-4 md:mb-0">
+            <span class="text-xl font-bold text-gray-700 mr-2">Numéros :</span>
+            ${draw.slice(0, 5).map(num => `<span class="inline-block bg-primary-100 text-primary-600 px-3 py-1 rounded-full m-1">${num}</span>`).join('')}
+          </div>
+          <div class="flex flex-wrap justify-center">
+            <span class="text-xl font-bold text-gray-700 mr-2">Étoiles :</span>
+            ${draw.slice(5).map(num => `<span class="inline-block bg-primary-100 text-primary-600 px-3 py-1 rounded-full m-1">${num}</span>`).join('')}
+          </div>
+        </div>
+      `;
+      // On insère la visu du dernier tirage en haut de la section résultats
+      document.getElementById('results').prepend(lastDrawDiv);
+    }
+  
+    // Fonction qui effectue l'analyse des tirages
+    function analyzeEuroMillions(data) {
+      const numbersStats = {};
+      const starsStats = {};
+      const totalDraws = data.length;
+  
+      // Initialisation pour les numéros de 1 à 50
+      for (let i = 1; i <= 50; i++) {
+        numbersStats[i] = {
+          totalOccurrences: 0,
+          drawsSinceLastAppearance: totalDraws,
+          positions: [],
+          lastDrawIndex: -1,
+          weightedFrequency: 0
+        };
+      }
+  
+      // Initialisation pour les étoiles de 1 à 12
+      for (let i = 1; i <= 12; i++) {
+        starsStats[i] = {
+          totalOccurrences: 0,
+          drawsSinceLastAppearance: totalDraws,
+          positions: [],
+          lastDrawIndex: -1,
+          weightedFrequency: 0
+        };
+      }
+  
+      // Parcours de chaque tirage (on suppose que data est ordonné du plus ancien au plus récent)
+      data.forEach((draw, index) => {
+        const weight = totalDraws - index;
+  
+        // Analyse des 5 numéros
+        for (let i = 0; i < 5; i++) {
+          const number = draw[i];
+          if (numbersStats[number] !== undefined) {
+            const stats = numbersStats[number];
+            stats.totalOccurrences++;
+            stats.drawsSinceLastAppearance = 0;
+            stats.positions.push(i);
+            stats.lastDrawIndex = index;
+            stats.weightedFrequency += weight;
+          }
+        }
+  
+        // Analyse des 2 étoiles
+        for (let i = 5; i < 7; i++) {
+          const star = draw[i];
+          if (starsStats[star] !== undefined) {
+            const stats = starsStats[star];
+            stats.totalOccurrences++;
+            stats.drawsSinceLastAppearance = 0;
+            stats.positions.push(i - 5);
+            stats.lastDrawIndex = index;
+            stats.weightedFrequency += weight;
+          }
+        }
+  
+        // Incrémentation du compteur "drawsSinceLastAppearance" pour tous
+        Object.values(numbersStats).forEach(stat => stat.drawsSinceLastAppearance++);
+        Object.values(starsStats).forEach(stat => stat.drawsSinceLastAppearance++);
+      });
+  
+      // Méthode 1 : Ratio simple
+      const numberRatios1 = Object.entries(numbersStats).map(([number, stats]) => ({
+        number: parseInt(number),
+        ratio: stats.drawsSinceLastAppearance / Math.max(stats.totalOccurrences, 1)
+      }));
+      const starRatios1 = Object.entries(starsStats).map(([star, stats]) => ({
+        star: parseInt(star),
+        ratio: stats.drawsSinceLastAppearance / Math.max(stats.totalOccurrences, 1)
+      }));
+  
+      // Méthode 2 : Ratio logarithmique
+      const numberRatios2 = Object.entries(numbersStats).map(([number, stats]) => ({
+        number: parseInt(number),
+        ratio: stats.totalOccurrences * Math.log(stats.drawsSinceLastAppearance + 1)
+      }));
+      const starRatios2 = Object.entries(starsStats).map(([star, stats]) => ({
+        star: parseInt(star),
+        ratio: stats.totalOccurrences * Math.log(stats.drawsSinceLastAppearance + 1)
+      }));
+  
+      // Méthode 3 : Analyse Contextuelle Dynamique
+      const numberScores3 = Object.entries(numbersStats).map(([number, stats]) => {
+        const frequencyScore = stats.totalOccurrences * 0.3;
+        const intervalScore = Math.log(stats.drawsSinceLastAppearance + 1) * 0.2;
+        const positionScore = stats.positions.length > 0 ? (stats.positions.reduce((sum, pos) => sum + pos, 0) / stats.positions.length) * 0.3 : 0;
+        return {
+          number: parseInt(number),
+          score: frequencyScore + intervalScore + positionScore
+        };
+      });
+      const starScores3 = Object.entries(starsStats).map(([star, stats]) => {
+        const frequencyScore = stats.totalOccurrences * 0.4;
+        const intervalScore = Math.log(stats.drawsSinceLastAppearance + 1) * 0.3;
+        const positionScore = stats.positions.length > 0 ? (stats.positions.reduce((sum, pos) => sum + pos, 0) / stats.positions.length) * 0.3 : 0;
+        return {
+          star: parseInt(star),
+          score: frequencyScore + intervalScore + positionScore
+        };
+      });
+  
+      // Méthode 4 : Analyse de Fréquence Pondérée
+      const numberScores4 = Object.entries(numbersStats).map(([number, stats]) => ({
+        number: parseInt(number),
+        score: stats.weightedFrequency
+      }));
+      const starScores4 = Object.entries(starsStats).map(([star, stats]) => ({
+        star: parseInt(star),
+        score: stats.weightedFrequency
+      }));
+  
+      // Sélection des meilleurs résultats pour chaque méthode
+      const topNumbers1 = numberRatios1.sort((a, b) => b.ratio - a.ratio).slice(0, 5);
+      const topStars1 = starRatios1.sort((a, b) => b.ratio - a.ratio).slice(0, 2);
+  
+      const topNumbers2 = numberRatios2.sort((a, b) => b.ratio - a.ratio).slice(0, 5);
+      const topStars2 = starRatios2.sort((a, b) => b.ratio - a.ratio).slice(0, 2);
+  
+      const topNumbers3 = numberScores3.sort((a, b) => b.score - a.score).slice(0, 5);
+      const topStars3 = starScores3.sort((a, b) => b.score - a.score).slice(0, 2);
+  
+      const topNumbers4 = numberScores4.sort((a, b) => b.score - a.score).slice(0, 5);
+      const topStars4 = starScores4.sort((a, b) => b.score - a.score).slice(0, 2);
+  
+      // Affichage global des résultats
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML += `<div class="text-center text-xl font-semibold text-gray-700 mb-4">
+        Nombre total de tirages : ${totalDraws}
+      </div>`;
+  
+      // Fonction utilitaire pour créer une section de résultats
+      function createResultSection(title, topNumbers, topStars) {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'bg-white shadow-md rounded-lg p-6 mb-6';
+  
+        sectionDiv.innerHTML = `
+          <h2 class="text-2xl font-semibold text-primary-600 mb-4">${title}</h2>
+          <div class="grid md:grid-cols-2 gap-6">
+            <div>
+              <h3 class="text-xl font-medium text-gray-700 mb-3">Top 5 Numéros</h3>
+              <div class="overflow-x-auto">
+                <table class="w-full bg-gray-50 rounded-lg">
+                  <thead>
+                    <tr class="bg-primary-100">
+                      <th class="p-3 text-left">Numéro</th>
+                      <th class="p-3 text-left">Score</th>
+                      <th class="p-3 text-left">Nb Sorties</th>
+                      <th class="p-3 text-left">Tirages</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${topNumbers.map(n => `
+                      <tr class="border-b hover:bg-primary-50 transition">
+                        <td class="p-3 font-bold text-primary-600">${n.number}</td>
+                        <td class="p-3">${(n.ratio || n.score).toFixed(2)}</td>
+                        <td class="p-3">${numbersStats[n.number].totalOccurrences}</td>
+                        <td class="p-3">${numbersStats[n.number].drawsSinceLastAppearance}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <h3 class="text-xl font-medium text-gray-700 mb-3">Top 2 Étoiles</h3>
+              <div class="overflow-x-auto">
+                <table class="w-full bg-gray-50 rounded-lg">
+                  <thead>
+                    <tr class="bg-primary-100">
+                      <th class="p-3 text-left">Étoile</th>
+                      <th class="p-3 text-left">Score</th>
+                      <th class="p-3 text-left">Nb Sorties</th>
+                      <th class="p-3 text-left">Tirages</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${topStars.map(s => `
+                      <tr class="border-b hover:bg-primary-50 transition">
+                        <td class="p-3 font-bold text-primary-600">${s.star}</td>
+                        <td class="p-3">${(s.ratio || s.score).toFixed(2)}</td>
+                        <td class="p-3">${starsStats[s.star].totalOccurrences}</td>
+                        <td class="p-3">${starsStats[s.star].drawsSinceLastAppearance}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        `;
+        resultsDiv.innerHTML += sectionDiv.outerHTML;
+      }
+  
+      // Création des sections de résultats pour chaque méthode
+      createResultSection('Méthode 1 : Ratio Simple', topNumbers1, topStars1);
+      createResultSection('Méthode 2 : Ratio Logarithmique', topNumbers2, topStars2);
+      createResultSection('Méthode 3 : Analyse Contextuelle Dynamique', topNumbers3, topStars3);
+      createResultSection('Méthode 4 : Analyse de Fréquence Pondérée', topNumbers4, topStars4);
+    }
+  
+    // Événement de chargement des données depuis l’API
+    document.getElementById('loadData').addEventListener('click', function() {
+      document.getElementById('errorMessage').innerText = '';
+      document.getElementById('results').innerHTML = '';
+  
+      fetch('https://euromillions.api.pedromealha.dev/draws')
+        .then(response => response.json())
+        .then(data => {
+          // Transformation attendue : chaque tirage possède "numbers" (tableau de 5 numéros)
+          // et "stars" (tableau de 2 étoiles)
+          const processedData = data.map(draw => [...draw.numbers, ...draw.stars]);
+          // Afficher la visu du dernier tirage (le plus récent)
+          displayLastDraw(processedData[processedData.length - 1]);
+          // Effectuer l'analyse sur l'ensemble des tirages
+          analyzeEuroMillions(processedData);
+        })
+        .catch(error => {
+          console.error("Erreur lors du chargement des données depuis l'API :", error);
+          document.getElementById('errorMessage').innerText = "Erreur : " + error.message;
+        });
+    });
+  </script>
+</body>
+</html>
